@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   const { method, query, body } = req;
 
-  // 1. الحفاظ على عملية التحقق (العلامة الخضراء)
+  // 1. التحقق من Webhook (للعلامة الخضراء)
   if (method === 'GET') {
     if (query['hub.verify_token'] === 'verify123') {
       return res.status(200).send(query['hub.challenge']);
@@ -9,15 +9,16 @@ export default async function handler(req, res) {
     return res.status(403).end();
   }
 
-  // 2. الرد التلقائي بالرابط + الأوديو
+  // 2. الرد التلقائي (الرابط + الأوديو)
   if (method === 'POST') {
-    res.status(200).send('EVENT_RECEIVED');
+    res.status(200).send('EVENT_RECEIVED'); // رد سريع لمنع التوقف
 
     const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
     if (message && message.from) {
       const customerPhone = message.from;
       const phoneId = "989354214252486"; 
+      
       const headers = {
         'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
         'Content-Type': 'application/json'
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
 
       try {
         // أ: إرسال القالب (رابط المجموعة)
-        await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+        const resTemplate = await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
@@ -46,7 +47,9 @@ export default async function handler(req, res) {
           })
         });
 
-        // ب: إرسال الأوديو (مباشرة بعد الرابط)
+        if (!resTemplate.ok) throw new Error('Template failed');
+
+        // ب: إرسال الأوديو (بشكل منفصل لضمان الوصول)
         await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
           method: 'POST',
           headers: headers,
@@ -58,10 +61,10 @@ export default async function handler(req, res) {
           })
         });
 
-        console.log(`✅ Success: Link and Audio sent to ${customerPhone}`);
+        console.log(`✅ Success for ${customerPhone}`);
 
       } catch (err) {
-        console.error("❌ Error during sending:", err);
+        console.error("❌ Fetch Error:", err.message);
       }
     }
     return;
