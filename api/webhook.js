@@ -1,32 +1,35 @@
 export default async function handler(req, res) {
-  const { method, query, body } = req;
+  // 1. معالجة طلب التحقق (GET) بطريقة حديثة تمنع تحذير DEP0169
+  if (req.method === 'GET') {
+    const { searchParams } = new URL(req.url, `https://${req.headers.host}`);
+    const mode = searchParams.get('hub.mode');
+    const token = searchParams.get('hub.verify_token');
+    const challenge = searchParams.get('hub.challenge');
 
-  // 1. التحقق من Webhook (للعلامة الخضراء)
-  if (method === 'GET') {
-    if (query['hub.verify_token'] === 'verify123') {
-      return res.status(200).send(query['hub.challenge']);
+    if (mode === 'subscribe' && token === 'verify123') {
+      console.log("✅ Webhook Verified!");
+      return res.status(200).send(challenge);
     }
     return res.status(403).end();
   }
 
-  // 2. الرد التلقائي (الرابط + الأوديو)
-  if (method === 'POST') {
-    res.status(200).send('EVENT_RECEIVED'); // رد سريع لمنع التوقف
+  // 2. معالجة الرسائل الواردة (POST)
+  if (req.method === 'POST') {
+    res.status(200).send('EVENT_RECEIVED');
 
-    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
     if (message && message.from) {
       const customerPhone = message.from;
-      const phoneId = "989354214252486"; 
-      
+      const phoneId = "989354214252486";
       const headers = {
         'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
         'Content-Type': 'application/json'
       };
 
       try {
-        // أ: إرسال القالب (رابط المجموعة)
-        const resTemplate = await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+        // إرسال الرابط
+        await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
@@ -47,9 +50,7 @@ export default async function handler(req, res) {
           })
         });
 
-        if (!resTemplate.ok) throw new Error('Template failed');
-
-        // ب: إرسال الأوديو (بشكل منفصل لضمان الوصول)
+        // إرسال الأوديو
         await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
           method: 'POST',
           headers: headers,
@@ -61,10 +62,9 @@ export default async function handler(req, res) {
           })
         });
 
-        console.log(`✅ Success for ${customerPhone}`);
-
+        console.log(`✅ Done: Link and Audio sent to ${customerPhone}`);
       } catch (err) {
-        console.error("❌ Fetch Error:", err.message);
+        console.error("❌ Error:", err.message);
       }
     }
     return;
