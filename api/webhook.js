@@ -1,30 +1,71 @@
 export default async function handler(req, res) {
-  // ===== 1️⃣ التحقق من Meta (Webhook Verification) =====
-  if (req.method === "GET") {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
+  const { method, query, body } = req;
 
-    // نفس التوكن اللي حاط فـ Meta
-    const VERIFY_TOKEN = "verify123";
+  // 1. الجزء المسؤول عن التحقق (لإصلاح Verification Failed)
+  if (method === 'GET') {
+    const mode = query['hub.mode'];
+    const token = query['hub.verify_token'];
+    const challenge = query['hub.challenge'];
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      console.log("✅ Webhook Verified by Meta");
+    // تأكد أن verify123 هو نفسه الموجود في لوحة تحكم Meta
+    if (mode === 'subscribe' && token === 'verify123') {
+      console.log("✅ Webhook Verified Successfully!");
       return res.status(200).send(challenge);
-    } else {
-      console.log("❌ Verification Failed");
-      return res.status(403).send("Forbidden");
     }
+    console.error("❌ Verification Failed: Token Mismatch");
+    return res.status(403).end();
   }
 
-  // ===== 2️⃣ استقبال رسائل واتساب (POST) =====
-  if (req.method === "POST") {
-    console.log("📩 Incoming Webhook Event:");
-    console.log(JSON.stringify(req.body, null, 2));
+  // 2. الجزء المسؤول عن الرد التلقائي على المتصل
+  if (method === 'POST') {
+    // إرسال استجابة سريعة لـ Meta بأننا استلمنا الطلب
+    res.status(200).send('EVENT_RECEIVED');
 
-    return res.status(200).send("EVENT_RECEIVED");
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+    const message = value?.messages?.[0];
+
+    // إذا كانت هناك رسالة واردة (وليس مجرد تحديث حالة)
+    if (message && message.from) {
+      const customerPhone = message.from;
+      const phoneId = "989354214252486"; 
+
+      console.log(`📩 New message from: ${customerPhone}`);
+
+      const headers = {
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      };
+
+      try {
+        // أ: إرسال القالب (رابط المجموعة)
+        await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            "messaging_product": "whatsapp",
+            "to": customerPhone,
+            "type": "template",
+            "template": {
+              "name": "welcome_with_links",
+              "language": { "code": "ar" },
+              "components": [{
+                "type": "body",
+                "parameters": [
+                  { "type": "text", "text": "https://chat.whatsapp.com/FvfkX4uo7UbKVxoFP9KILH" },
+                  { "type": "text", "text": "-" }
+                ]
+              }]
+            }
+          })
+        });
+        console.log("✅ Template sent!");
+
+      } catch (err) {
+        console.error("❌ Error sending message:", err);
+      }
+    }
+    return;
   }
-
-  // ===== 3️⃣ أي طلب آخر (اختبار يدوي) =====
-  return res.status(200).send("Webhook is working ✅");
 }
