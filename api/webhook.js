@@ -1,33 +1,32 @@
 export default async function handler(req, res) {
 
-  // التحقق من Webhook
+  // التحقق من Webhook (Verification من Meta)
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    if (mode && token === 'verify123') {
+    if (mode === 'subscribe' && token === 'verify123') {
       return res.status(200).send(challenge);
     }
-    return res.status(403).end();
+    return res.status(403).send('Forbidden');
   }
 
-  // استقبال الرسائل
+  // استقبال رسائل WhatsApp
   if (req.method === 'POST') {
     res.status(200).send('EVENT_RECEIVED');
 
     const body = req.body;
     const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-    // خاص تكون رسالة واردة من رقم آخر (ماشي رقم البزنس)
     if (!message || !message.from) return;
 
-    const phone_id = "989354214252486";
-    const token = process.env.WHATSAPP_TOKEN;
+    const phone_id = "989354214252486"; // Phone Number ID ديالك
+    const token = process.env.WHATSAPP_TOKEN; // التوكن من Vercel
     const to = message.from;
 
     try {
-      // 1️⃣ إرسال القالب
+      // 1️⃣ إرسال قالب ترحيبي (Template)
       await fetch(`https://graph.facebook.com/v24.0/${phone_id}/messages`, {
         method: 'POST',
         headers: {
@@ -39,22 +38,13 @@ export default async function handler(req, res) {
           "to": to,
           "type": "template",
           "template": {
-            "name": "come_with_links",
-            "language": { "code": "ar" },
-            "components": [
-              {
-                "type": "body",
-                "parameters": [
-                  { "type": "text", "text": "https://chat.whatsapp.com/FvfkX4uo7UbKVxoFP9KILH" },
-                  { "type": "text", "text": "-" }
-                ]
-              }
-            ]
+            "name": "welcome_with_links",
+            "language": { "code": "ar" }
           }
         })
       });
 
-      // 2️⃣ إرسال الأوديو
+      // 2️⃣ إرسال المقطع الصوتي
       await fetch(`https://graph.facebook.com/v24.0/${phone_id}/messages`, {
         method: 'POST',
         headers: {
