@@ -1,17 +1,17 @@
 export default async function handler(req, res) {
   const { method, query, body } = req;
 
-  // 1. الجزء المسؤول عن التحقق (لإصلاح Verification Failed)
+  // 1. الجزء المسؤول عن التحقق (إصلاح Token Mismatch)
   if (method === 'GET') {
-    const mode = query['hub.mode'];
     const token = query['hub.verify_token'];
     const challenge = query['hub.challenge'];
 
-    // تأكد أن verify123 هو نفسه الموجود في لوحة تحكم Meta
-    if (mode === 'subscribe' && token === 'verify123') {
+    // سنركز فقط على مطابقة الرمز verify123
+    if (token === 'verify123') {
       console.log("✅ Webhook Verified Successfully!");
       return res.status(200).send(challenge);
     }
+    
     console.error("❌ Verification Failed: Token Mismatch");
     return res.status(403).end();
   }
