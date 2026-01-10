@@ -1,70 +1,30 @@
 export default async function handler(req, res) {
+  // ===== 1️⃣ التحقق من Meta (Webhook Verification) =====
+  if (req.method === "GET") {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
 
-  // التحقق من Webhook (Verification من Meta)
-  if (req.method === 'GET') {
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
+    // نفس التوكن اللي حاط فـ Meta
+    const VERIFY_TOKEN = "verify123";
 
-    if (mode === 'subscribe' && token === 'verify123') {
+    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+      console.log("✅ Webhook Verified by Meta");
       return res.status(200).send(challenge);
-    }
-    return res.status(403).send('Forbidden');
-  }
-
-  // استقبال رسائل WhatsApp
-  if (req.method === 'POST') {
-    res.status(200).send('EVENT_RECEIVED');
-
-    const body = req.body;
-    const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-
-    if (!message || !message.from) return;
-
-    const phone_id = "989354214252486"; // Phone Number ID ديالك
-    const token = process.env.WHATSAPP_TOKEN; // التوكن من Vercel
-    const to = message.from;
-
-    try {
-      // 1️⃣ إرسال قالب ترحيبي (Template)
-      await fetch(`https://graph.facebook.com/v24.0/${phone_id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          "messaging_product": "whatsapp",
-          "to": to,
-          "type": "template",
-          "template": {
-            "name": "welcome_with_links",
-            "language": { "code": "ar" }
-          }
-        })
-      });
-
-      // 2️⃣ إرسال المقطع الصوتي
-      await fetch(`https://graph.facebook.com/v24.0/${phone_id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          "messaging_product": "whatsapp",
-          "to": to,
-          "type": "audio",
-          "audio": {
-            "link": "https://theuntamed-privacy.vercel.app/audio01.mp3"
-          }
-        })
-      });
-
-      console.log("✅ Template + Audio sent to:", to);
-
-    } catch (err) {
-      console.error("❌ Error sending message:", err);
+    } else {
+      console.log("❌ Verification Failed");
+      return res.status(403).send("Forbidden");
     }
   }
+
+  // ===== 2️⃣ استقبال رسائل واتساب (POST) =====
+  if (req.method === "POST") {
+    console.log("📩 Incoming Webhook Event:");
+    console.log(JSON.stringify(req.body, null, 2));
+
+    return res.status(200).send("EVENT_RECEIVED");
+  }
+
+  // ===== 3️⃣ أي طلب آخر (اختبار يدوي) =====
+  return res.status(200).send("Webhook is working ✅");
 }
