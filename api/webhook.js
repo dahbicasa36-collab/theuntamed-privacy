@@ -1,38 +1,23 @@
 export default async function handler(req, res) {
   const { method, query, body } = req;
 
-  // 1. الجزء المسؤول عن التحقق (إصلاح Token Mismatch)
+  // 1. الحفاظ على عملية التحقق (العلامة الخضراء)
   if (method === 'GET') {
-    const token = query['hub.verify_token'];
-    const challenge = query['hub.challenge'];
-
-    // سنركز فقط على مطابقة الرمز verify123
-    if (token === 'verify123') {
-      console.log("✅ Webhook Verified Successfully!");
-      return res.status(200).send(challenge);
+    if (query['hub.verify_token'] === 'verify123') {
+      return res.status(200).send(query['hub.challenge']);
     }
-    
-    console.error("❌ Verification Failed: Token Mismatch");
     return res.status(403).end();
   }
 
-  // 2. الجزء المسؤول عن الرد التلقائي على المتصل
+  // 2. الرد التلقائي بالرابط + الأوديو
   if (method === 'POST') {
-    // إرسال استجابة سريعة لـ Meta بأننا استلمنا الطلب
     res.status(200).send('EVENT_RECEIVED');
 
-    const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const message = value?.messages?.[0];
+    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-    // إذا كانت هناك رسالة واردة (وليس مجرد تحديث حالة)
     if (message && message.from) {
       const customerPhone = message.from;
       const phoneId = "989354214252486"; 
-
-      console.log(`📩 New message from: ${customerPhone}`);
-
       const headers = {
         'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
         'Content-Type': 'application/json'
@@ -60,10 +45,23 @@ export default async function handler(req, res) {
             }
           })
         });
-        console.log("✅ Template sent!");
+
+        // ب: إرسال الأوديو (مباشرة بعد الرابط)
+        await fetch(`https://graph.facebook.com/v24.0/${phoneId}/messages`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            "messaging_product": "whatsapp",
+            "to": customerPhone,
+            "type": "audio",
+            "audio": { "link": "https://theuntamed-privacy.vercel.app/audio01.mp3" }
+          })
+        });
+
+        console.log(`✅ Success: Link and Audio sent to ${customerPhone}`);
 
       } catch (err) {
-        console.error("❌ Error sending message:", err);
+        console.error("❌ Error during sending:", err);
       }
     }
     return;
